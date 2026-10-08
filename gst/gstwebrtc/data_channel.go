@@ -1,6 +1,16 @@
 package gstwebrtc
 
-// #include "gst.go.h"
+/*
+#include "gst.go.h"
+
+static void cgoDataChannelSendData(GstWebRTCDataChannel *channel, GBytes *data, GError **error) {
+#if GST_CHECK_VERSION(1, 22, 0)
+	gst_webrtc_data_channel_send_data_full(channel, data, error);
+#else
+	gst_webrtc_data_channel_send_data(channel, data);
+#endif
+}
+*/
 import "C"
 import (
 	"errors"
@@ -29,6 +39,8 @@ func (dc *DataChannel) Close() {
 	C.gst_webrtc_data_channel_close((*C.GstWebRTCDataChannel)(dc.Native()))
 }
 
+// SendData sends a binary message. On GStreamer versions before 1.22, the underlying
+// API cannot report send errors, so SendData always returns nil.
 func (dc *DataChannel) SendData(data []byte) error {
 	var gerr *C.GError
 
@@ -37,7 +49,7 @@ func (dc *DataChannel) SendData(data []byte) error {
 	cbytes := C.g_bytes_new(C.gconstpointer(addr), C.gsize(len(data)))
 	defer C.g_bytes_unref(cbytes)
 
-	C.gst_webrtc_data_channel_send_data_full((*C.GstWebRTCDataChannel)(dc.Native()), cbytes, &gerr)
+	C.cgoDataChannelSendData((*C.GstWebRTCDataChannel)(dc.Native()), cbytes, &gerr)
 
 	if gerr != nil {
 		defer C.g_error_free((*C.GError)(gerr))
