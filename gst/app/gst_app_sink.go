@@ -16,6 +16,12 @@ GstFlowReturn cgoSinkNewPrerollCb (GstAppSink * sink, gpointer user_data) { retu
 GstFlowReturn cgoSinkNewSampleCb  (GstAppSink * sink, gpointer user_data) { return goSinkNewSampleCb(sink, user_data); }
 gboolean cgoSinkProposeAllocationCb  (GstAppSink * sink, GstQuery * query, gpointer user_data) { return goSinkProposeAllocationCb(sink, query, user_data); }
 
+static void cgoSinkSetProposeAllocationCallback(GstAppSinkCallbacks *callbacks) {
+#if GST_CHECK_VERSION(1, 24, 0)
+	callbacks->propose_allocation = cgoSinkProposeAllocationCb;
+#endif
+}
+
 */
 import "C"
 
@@ -31,9 +37,10 @@ import (
 
 // SinkCallbacks represents callbacks that can be installed on an app sink when data is available.
 type SinkCallbacks struct {
-	EOSFunc               func(appSink *Sink)
-	NewPrerollFunc        func(appSink *Sink) gst.FlowReturn
-	NewSampleFunc         func(appSink *Sink) gst.FlowReturn
+	EOSFunc        func(appSink *Sink)
+	NewPrerollFunc func(appSink *Sink) gst.FlowReturn
+	NewSampleFunc  func(appSink *Sink) gst.FlowReturn
+	// ProposeAllocationFunc requires GStreamer 1.24 or later; ignored on older versions.
 	ProposeAllocationFunc func(appSink *Sink, query *gst.Query) bool
 }
 
@@ -154,11 +161,11 @@ func (a *Sink) SetBufferListSupport(enabled bool) {
 func (a *Sink) SetCallbacks(cbs *SinkCallbacks) {
 	ptr := gopointer.Save(cbs)
 	appSinkCallbacks := &C.GstAppSinkCallbacks{
-		eos:                (*[0]byte)(unsafe.Pointer(C.cgoSinkEOSCb)),
-		new_preroll:        (*[0]byte)(unsafe.Pointer(C.cgoSinkNewPrerollCb)),
-		new_sample:         (*[0]byte)(unsafe.Pointer(C.cgoSinkNewSampleCb)),
-		propose_allocation: (*[0]byte)(unsafe.Pointer(C.cgoSinkProposeAllocationCb)),
+		eos:         (*[0]byte)(unsafe.Pointer(C.cgoSinkEOSCb)),
+		new_preroll: (*[0]byte)(unsafe.Pointer(C.cgoSinkNewPrerollCb)),
+		new_sample:  (*[0]byte)(unsafe.Pointer(C.cgoSinkNewSampleCb)),
 	}
+	C.cgoSinkSetProposeAllocationCallback(appSinkCallbacks)
 	C.gst_app_sink_set_callbacks(
 		a.Instance(),
 		appSinkCallbacks,
